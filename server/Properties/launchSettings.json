@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Udapp.UserCenter": {
+      "commandName": "Project",
+      "applicationUrl": "http://0.0.0.0:1010",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+# --- frontend build / deps ---
+node_modules/
+web/node_modules/
+web/dist/
+web/.vite/
+
+# --- .NET build / publish ---
+server/bin/
+server/obj/
+server/wwwroot/
+server/*.user
+publish/
+dist/
+
+# --- local / secret config (keep *.example.json) ---
+server/appsettings.json
+server/appsettings.Development.json
+server/config.json
+**/user-center.config.json
+
+# --- env ---
+.env
+.env.*
+!.env.pages
+!.env.local.example
+
+# --- data / logs ---
+*.db
+*.db-journal
+*.log
+
+# --- internal scratch / design notes (not for public) ---
+docs/jk.temp
+docs/prompt.udapp-user-center.md
+docs/
+
+# --- IDE / OS ---
+.vs/
+.idea/
+*.suo
+*.user
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+

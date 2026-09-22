@@ -1,0 +1,19 @@
+{
+  "AdminSubs": [
+    "<admin-jwt-sub-uuid>"
+  ],
+  "CasdoorProvision": {
+    "Username": "ops_admin",
+    "Password": ""
+  },
+  "ClientApps": {
+    "stockase": {
+      "allowedRoles": [
+        "af"
+      ]
+    }
+  },
+  "Llm": {
+    "Model": "zhipu/glm-4-flash"
+  }
+}
