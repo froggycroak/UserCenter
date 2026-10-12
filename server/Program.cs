@@ -11,6 +11,14 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = contentRoot,
     WebRootPath = Path.Combine(contentRoot, "wwwroot")
 });
+
+// appsettings.json 统一从 %APPDATA%\ArchiFrog\UDAppUserCenter\config\ 读取，
+// 与 user-center.config.json 同目录；程序目录不再放置 appsettings.json。
+builder.Configuration.AddJsonFile(
+    Path.Combine(OpsConfigFile.DirectoryPath(), "appsettings.json"),
+    optional: true,
+    reloadOnChange: true);
+
 builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? "http://0.0.0.0:1010");
 
 var opsConfigPath = OpsConfigFile.EnsureExists();

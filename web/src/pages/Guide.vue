@@ -1,8 +1,12 @@
 <template>
   <div class="container guide-page">
-    <header class="section-header">
-      <p class="section-eyebrow">GUIDE</p>
-      <h2 class="section-title">接入说明</h2>
+    <div class="layout-main-head">
+      <header class="section-header">
+        <p class="section-eyebrow">GUIDE</p>
+        <h2 class="section-title">接入说明</h2>
+      </header>
+    </div>
+    <div class="guide-intro">
       <p class="guide-lead">
         给其它网页应用：用本服务的登录 / 注册 / 资料弹窗，不要再打开 Casdoor 原生页。
       </p>
@@ -11,13 +15,14 @@
         <button class="btn btn-secondary" type="button" @click="copyOrigin">复制本服务 Origin</button>
       </div>
       <p v-if="copied" class="guide-copied" role="status">已复制 {{ origin }}</p>
-    </header>
+    </div>
 
     <nav class="guide-toc" aria-label="本页目录">
       <a href="#urls">打开哪些页面</a>
       <a href="#iframe">iframe 接法</a>
       <a href="#messages">postMessage</a>
       <a href="#after-token">拿到 Token 之后</a>
+      <a href="#app-roles">应用开通 Role</a>
       <a href="#whitelist">白名单</a>
     </nav>
 
@@ -130,8 +135,35 @@
       </p>
     </section>
 
+    <section id="app-roles" class="guide-section">
+      <h3>5. 应用开通与 Casdoor Role（勿重复校验）</h3>
+      <p class="guide-note guide-note-emphasis">
+        各业务应用<strong>不需要</strong>再解析 JWT 里的 Casdoor <code>roles</code>（例如 <code>af</code>）做「能否使用本应用」的二次门禁。
+        该逻辑已在<strong>本用户中心服务端</strong>统一配置并在登录 / 刷新时执行。
+      </p>
+      <ul class="guide-list">
+        <li>
+          用户通过本服务的登录弹窗或 <code>POST /api/auth/login</code>、
+          <code>POST /api/auth/refresh</code> 拿到 <code>accessToken</code> 时，已通过对应
+          <code>clientId</code> 的开通校验；未开通会在此步返回 403（「您的账户未开通本应用」），不会把 token 交给宿主。
+        </li>
+        <li>
+          名单由运维在服务端 <code>user-center.config.json</code> 的
+          <code>ClientApps.&lt;clientId&gt;.allowedRoles</code> 维护（示例见仓库
+          <code>server/config.example.json</code>）。需要增减可访问用户时，请改这里或联系用户中心管理员，<strong>不要在各应用里再写一套 role 判断</strong>。
+        </li>
+        <li>
+          你们后端仍应做常规 JWT 验签、校验 <code>aud</code> / <code>azp</code> 与登录时一致的
+          <code>clientId</code>，并用 <code>sub</code> 标识用户；只是<strong>不必</strong>再对照 Casdoor role 做应用开通。
+        </li>
+        <li>
+          若用户曾直连 Casdoor 或其它入口拿到 token、绕过了本服务登录，才可能在你们侧看到「有 token 但未开通」的边角情况；接入方应统一走本服务弹窗登录，避免自行验 role。
+        </li>
+      </ul>
+    </section>
+
     <section id="whitelist" class="guide-section">
-      <h3>5. 上线前白名单</h3>
+      <h3>6. 上线前白名单</h3>
       <ul class="guide-list">
         <li>iframe 调弹窗、弹窗自己调 <code>/api</code>，一般不必跨域。</li>
         <li>

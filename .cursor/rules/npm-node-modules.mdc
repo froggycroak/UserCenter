@@ -6,19 +6,21 @@ alwaysApply: true
 # npm / node_modules 包管理
 
 - 实体目录：`C:\ProgramCustom\LibCustom\NodeModules\<项目标识>\node_modules\`
-- 仓库内只保留 **Junction**（`mklink /J`），位置按前端根目录决定，本仓库为 `web\node_modules`
+- 仓库内只保留 **Junction**（`mklink /J`），位置按前端根目录决定
 - 本仓库项目标识：`user-center.web`
   - 实体：`C:\ProgramCustom\LibCustom\NodeModules\user-center.web\node_modules`
   - 联接：`web\node_modules` → 上述实体
+  - 联接：`web_sstd\node_modules` → **同一实体**（两前端共用依赖）
+- 工具图标：`web\public\images\icon` → `shared\public\images\icon`（Junction）；`web_sstd` 通过 Vite `publicDir: ../shared/public` 直接使用
 
 ## 安装与维护
 
 - **禁止**在 Windows 上对 Junction 执行 `npm install`（npm reify 可能把联接换成实体目录）
-- 安装：复制 `package.json` / `package-lock.json` 到实体父目录，在该目录执行 `npm install`，再把 lockfile 拷回仓库，最后重建 Junction
-- 使用 `web\ensure_node_modules.bat`，不要手写 `npm install` 到 `web\`
+- 安装：复制 `web/package.json` / `package-lock.json` 到实体父目录，在该目录执行 `npm install`，再把 lockfile 拷回仓库，最后重建 Junction
+- 使用 `web\ensure_node_modules.bat`（会同时挂上 `web` 与 `web_sstd` 的 node_modules Junction），不要手写 `npm install` 到 `web\` 或 `web_sstd\`
 
 ## 禁止
 
 - 不要在仓库里创建真实 `node_modules`
 - 不要用符号链接（`mklink /D`）替代 Junction
-- 不要把实体 `node_modules` 提交进 git（已 ignore `web/node_modules/`）
+- 不要把实体 `node_modules` 提交进 git（已 ignore `web/node_modules/`、`web_sstd/node_modules/`）

@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:pages": "vite build --mode pages",
+    "bootstrap:tools": "node ../shared/scripts/bootstrap-tools-xlsx.mjs",
+    "sync:tools": "node scripts/sync-tools.mjs",
+    "sync:tools:all": "node ../shared/scripts/sync-tools.mjs --target=ud && node ../shared/scripts/sync-tools.mjs --target=sstd",
+    "dev": "node scripts/sync-tools.mjs && vite",
+    "build": "node scripts/sync-tools.mjs && vite build",
+    "build:pages": "node scripts/sync-tools.mjs && vite build --mode pages",
     "preview:pages": "vite preview --mode pages"
   },
   "dependencies": {
@@ -15,6 +18,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
+    "exceljs": "^4.4.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
     "vue-tsc": "^2.2.0"

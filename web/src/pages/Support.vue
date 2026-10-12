@@ -1,60 +1,63 @@
 <template>
-  <div class="container tools-layout support-layout">
-    <aside class="support-aside" aria-label="联系方式">
-      <article class="support-card">
-        <p class="support-card-lead">有任何疑问或建议，请联系：</p>
-        <p class="support-card-name">胡工</p>
-        <a class="support-card-mail" href="mailto:huqian.archi@outlook.com">huqian.archi@outlook.com</a>
-      </article>
-    </aside>
+  <div class="container tools-layout account-layout">
+    <AccountAside return-path="/support" />
     <div class="support-main">
-      <section class="tools-section">
-        <header class="section-header">
-          <p class="section-eyebrow">SUPPORT</p>
-          <h2 class="section-title">技术支持</h2>
-        </header>
+      <section class="tools-section support-section">
+        <div class="layout-main-head">
+          <header class="section-header">
+            <p class="section-eyebrow">SUPPORT</p>
+            <h2 class="section-title">技术支持</h2>
+          </header>
+        </div>
+        <p class="support-lead">
+          有任何疑问或建议，请联系胡工
+          <a class="support-lead-mail" href="mailto:huqian.archi@outlook.com">huqian.archi@outlook.com</a>
+        </p>
 
         <form class="support-form" @submit.prevent="submit">
-          <div class="support-tags" role="group" aria-label="产品">
-            <button
-              v-for="tag in productTags"
-              :key="tag"
-              type="button"
-              class="support-tag"
-              :class="{ 'is-active': productTag === tag }"
-              @click="selectTag(tag)"
-            >
-              {{ tag }}
-            </button>
-          </div>
+          <div class="support-form-fill" aria-hidden="true" />
+          <div class="support-form-foot">
+            <p v-if="error" class="alert error">{{ error }}</p>
+            <p v-if="okMessage" class="alert ok">{{ okMessage }}</p>
 
-          <p v-if="error" class="alert error">{{ error }}</p>
-          <p v-if="okMessage" class="alert ok">{{ okMessage }}</p>
+            <div class="support-tags" role="group" aria-label="产品">
+              <button
+                v-for="tag in productTags"
+                :key="tag"
+                type="button"
+                class="support-tag"
+                :class="{ 'is-active': productTag === tag }"
+                @click="selectTag(tag)"
+              >
+                {{ tag }}
+              </button>
+            </div>
 
-          <div class="assistant-composer support-composer">
-            <textarea
-              v-model="content"
-              class="assistant-input"
-              rows="4"
-              maxlength="4000"
-              placeholder="描述你的问题或建议"
-            />
-            <button
-              class="assistant-send"
-              type="submit"
-              :disabled="busy || !content.trim()"
-              aria-label="提交"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 19V5M12 5l-7 7M12 5l7 7"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
+            <div class="assistant-composer support-composer">
+              <textarea
+                v-model="content"
+                class="assistant-input"
+                rows="1"
+                maxlength="4000"
+                placeholder="描述你的问题或建议"
+              />
+              <button
+                class="assistant-send"
+                type="submit"
+                :disabled="busy || !content.trim()"
+                aria-label="提交"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 19V5M12 5l-7 7M12 5l7 7"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </form>
       </section>
@@ -66,13 +69,14 @@
 import { computed, ref } from 'vue'
 import { api, clearTokens, getAccessToken } from '../api'
 import { openAuthDialog } from '../authDialog'
+import AccountAside from '../components/AccountAside.vue'
 import { toolSections } from '../tools-data'
 
 const productTags = computed(() => {
   const seen = new Set<string>()
   const tags: string[] = []
   for (const section of toolSections) {
-    if (section.id === 'external') continue
+    if (section.external) continue
     for (const tool of section.tools) {
       if (seen.has(tool.abbr)) continue
       seen.add(tool.abbr)

@@ -1,8 +1,13 @@
 # --- frontend build / deps ---
 node_modules/
 web/node_modules/
+web_sstd/node_modules/
 web/dist/
+web_sstd/dist/
 web/.vite/
+web_sstd/.vite/
+# icons live in shared/public; web/public/images/icon is a local Junction
+web/public/images/icon/
 
 # --- .NET build / publish ---
 server/bin/
@@ -18,10 +23,14 @@ server/appsettings.Development.json
 server/config.json
 **/user-center.config.json
 
+# --- deploy credentials (keep *.example.bat) ---
+server/.script/udapp_login/*.local.bat
+
 # --- env ---
 .env
 .env.*
 !.env.pages
+!.env.example
 !.env.local.example
 
 # --- data / logs ---
@@ -42,5 +51,8 @@ docs/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Excel 打开表格时的锁文件
+~$*
 
 

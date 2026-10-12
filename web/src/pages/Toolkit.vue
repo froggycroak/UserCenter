@@ -84,8 +84,12 @@ function scrollTo(id: string) {
   lockFromClick = true
   window.clearTimeout(unlockTimer)
   if (isNestedScroll(root)) {
-    const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop
-    root.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+    const relTop = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop
+    const maxScroll = root.scrollHeight - root.clientHeight
+    const isLast = id === sections[sections.length - 1]?.id
+    // 末尾章节贴底滚动，避免被顶到顶部、下方出现大片空白
+    const target = isLast ? maxScroll : Math.min(relTop, maxScroll)
+    root.scrollTo({ top: Math.max(0, target), behavior: 'auto' })
   } else {
     el.scrollIntoView({ behavior: 'auto', block: 'start' })
   }

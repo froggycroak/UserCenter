@@ -1,177 +1,141 @@
 <template>
-  <div class="container tools-layout assistant-layout">
-    <aside class="assistant-history" aria-label="会话列表">
-      <p class="assistant-history-empty">对话历史未开通</p>
-      <button class="btn btn-secondary assistant-new" type="button" @click="resetChat">新对话</button>
+  <div class="container tools-layout">
+    <aside class="tools-toc" aria-label="分类目录">
+      <nav class="toc-nav">
+        <a
+          v-for="section in sections"
+          :key="section.id"
+          :href="'#section-' + section.id"
+          class="toc-link"
+          :class="{ 'is-active': activeId === section.id }"
+          :aria-current="activeId === section.id ? 'true' : undefined"
+          @click.prevent="scrollTo(section.id)"
+        >
+          <span class="toc-zh">{{ section.title }}</span>
+          <span v-if="section.eyebrow" class="toc-en">{{ section.eyebrow }}</span>
+        </a>
+      </nav>
     </aside>
-    <div class="assistant-chat">
-      <div ref="threadEl" class="assistant-thread" aria-live="polite">
-        <div v-if="!messages.length" class="assistant-empty">
-          <p class="assistant-empty-title">有什么可以帮忙的？</p>
-          <p class="assistant-empty-hint">我会尽力帮你想办法...</p>
-        </div>
-        <div v-else class="assistant-msgs">
-          <div
-            v-for="(item, index) in messages"
-            :key="index"
-            class="assistant-msg"
-            :class="'is-' + item.role"
-          >
-            <div v-if="item.role === 'user'" class="assistant-msg-bubble">{{ item.content }}</div>
-            <div v-else class="assistant-msg-md">
-              <div v-if="item.tools?.length" class="assistant-tools">
-                <span
-                  v-for="tool in item.tools"
-                  :key="tool.name"
-                  class="assistant-tool"
-                  :class="'is-' + tool.status"
-                >{{ tool.label }}</span>
+    <div ref="scrollRoot" class="tools-scroll">
+      <section
+        v-for="(section, sIndex) in sections"
+        :id="'section-' + section.id"
+        :key="section.id"
+        class="tools-section"
+      >
+        <header class="section-header store-enter" :style="{ '--enter-delay': `${sIndex * 0.1}s` }">
+          <p v-if="section.eyebrow" class="section-eyebrow">{{ section.eyebrow }}</p>
+          <h2 class="section-title">{{ section.title }}</h2>
+        </header>
+        <div class="store-panel">
+          <div class="tools-grid">
+            <a
+              v-for="(tool, index) in section.tools"
+              :key="tool.abbr"
+              :href="tool.url === '#' ? undefined : tool.url"
+              class="tool-card store-enter"
+              :class="{ 'is-unavailable': tool.url === '#' }"
+              :style="{ '--enter-delay': `${(sIndex * 0.1 + index * 0.06).toFixed(2)}s` }"
+              :target="tool.url === '#' ? undefined : '_blank'"
+              :rel="tool.url === '#' ? undefined : 'noopener'"
+              :aria-disabled="tool.url === '#' ? 'true' : undefined"
+              @click="tool.url === '#' ? $event.preventDefault() : undefined"
+            >
+              <div class="tool-icon" :class="{ 'is-lg': tool.iconLg }">
+                <img :src="tool.icon" :alt="tool.abbr" class="tool-icon-img" />
               </div>
-              <span v-if="item.content">{{ item.content }}</span>
-              <span v-else class="assistant-msg-pending">{{ item.pending || '正在思考…' }}</span>
-              <span
-                v-if="sending && index === messages.length - 1"
-                class="assistant-caret"
-                aria-hidden="true"
-              />
-            </div>
+              <div class="tool-info">
+                <p class="tool-abbr">{{ tool.abbr }}</p>
+                <p class="tool-name">{{ tool.name }}</p>
+              </div>
+            </a>
           </div>
         </div>
-      </div>
-      <p v-if="error" class="alert error assistant-error">{{ error }}</p>
-      <form class="assistant-composer" @submit.prevent="send">
-        <textarea
-          ref="inputEl"
-          v-model="draft"
-          class="assistant-input"
-          rows="1"
-          placeholder="输入消息"
-          :disabled="sending"
-          @keydown="onKey"
-          @input="autosize"
-        />
-        <button class="assistant-send" type="submit" :disabled="sending || !draft.trim()" aria-label="发送">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 19V5M12 5l-7 7M12 5l7 7"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
-      </form>
-      <p class="assistant-composer-hint">内容由模型生成，请核实关键信息。Enter 发送，Shift+Enter 换行。</p>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { clearTokens, getAccessToken, isStaticDemo, streamAssistantChat, type ChatMessage } from '../api'
-import { openAuthDialog } from '../authDialog'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { externalToolSections } from '../toolsdata-external'
 
-const messages = ref<ChatMessage[]>([])
-const draft = ref('')
-const sending = ref(false)
-const error = ref('')
-const threadEl = ref<HTMLElement | null>(null)
-const inputEl = ref<HTMLTextAreaElement | null>(null)
-let abort: AbortController | undefined
+const sections = externalToolSections
+const activeId = ref(sections[0]?.id ?? '')
+const scrollRoot = ref<HTMLElement | null>(null)
+let lockFromClick = false
+let unlockTimer: number | undefined
 
-onMounted(() => inputEl.value?.focus())
-onBeforeUnmount(() => abort?.abort())
-
-function resetChat() {
-  abort?.abort()
-  abort = undefined
-  sending.value = false
-  error.value = ''
-  messages.value = []
-  draft.value = ''
-  void nextTick(() => {
-    autosize()
-    inputEl.value?.focus()
-  })
+function sectionEl(id: string) {
+  return document.getElementById(`section-${id}`)
 }
 
-function onKey(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    void send()
-  }
+function isNestedScroll(el: HTMLElement | null): el is HTMLElement {
+  if (!el) return false
+  const { overflowY } = getComputedStyle(el)
+  return overflowY === 'auto' || overflowY === 'scroll'
 }
 
-function autosize() {
-  const el = inputEl.value
+function scrollTo(id: string) {
+  const el = sectionEl(id)
+  const root = scrollRoot.value
   if (!el) return
-  el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-}
-
-async function scrollToEnd() {
-  await nextTick()
-  const el = threadEl.value
-  if (el) el.scrollTop = el.scrollHeight
-}
-
-async function send() {
-  const text = draft.value.trim()
-  if (!text || sending.value) return
-  if (!isStaticDemo() && !getAccessToken()) {
-    openAuthDialog('/login', '/assistant')
-    return
+  activeId.value = id
+  lockFromClick = true
+  window.clearTimeout(unlockTimer)
+  if (isNestedScroll(root)) {
+    const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop
+    root.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+  } else {
+    el.scrollIntoView({ behavior: 'auto', block: 'start' })
   }
-  error.value = ''
-  draft.value = ''
-  void nextTick(autosize)
-
-  messages.value.push({ role: 'user', content: text })
-  const history = messages.value.map((item) => ({ ...item }))
-  messages.value.push({ role: 'assistant', content: '' })
-  const replyIndex = messages.value.length - 1
-  sending.value = true
-  abort = new AbortController()
-  await scrollToEnd()
-
-  try {
-    await streamAssistantChat(
-      history,
-      (delta) => {
-        messages.value[replyIndex].content += delta
-        messages.value[replyIndex].pending = undefined
-        void scrollToEnd()
-      },
-      abort.signal,
-      (tool) => {
-        const reply = messages.value[replyIndex]
-        const chips = reply.tools ? [...reply.tools] : []
-        const idx = chips.findIndex((item) => item.name === tool.name)
-        if (idx >= 0) chips[idx] = tool
-        else chips.push(tool)
-        reply.tools = chips
-        reply.pending = tool.status === 'start' ? `正在${tool.label}…` : reply.pending
-        void scrollToEnd()
-      }
-    )
-    if (!messages.value[replyIndex]?.content) {
-      messages.value[replyIndex].content = '（无回复）'
-    }
-  } catch (e) {
-    if ((e instanceof DOMException || e instanceof Error) && e.name === 'AbortError') return
-    const msg = e instanceof Error ? e.message : '发送失败'
-    if (msg.includes('未登录') || msg.includes('401')) {
-      clearTokens()
-      openAuthDialog('/login', '/assistant')
-      return
-    }
-    error.value = msg
-    if (!messages.value[replyIndex]?.content) messages.value.splice(replyIndex, 1)
-  } finally {
-    sending.value = false
-    abort = undefined
-    void nextTick(() => inputEl.value?.focus())
-  }
+  unlockTimer = window.setTimeout(() => {
+    lockFromClick = false
+  }, 160)
 }
+
+function syncActive() {
+  if (lockFromClick) return
+  const nodes = sections
+    .map((section) => sectionEl(section.id))
+    .filter((node): node is HTMLElement => !!node)
+  if (!nodes.length) return
+
+  const root = scrollRoot.value
+  const nested = isNestedScroll(root)
+  const header = document.querySelector<HTMLElement>('.header')
+  const probe = nested
+    ? root.getBoundingClientRect().top + 8
+    : (header?.getBoundingClientRect().bottom ?? 0) + 8
+
+  let current = sections[0]?.id ?? ''
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].getBoundingClientRect().top <= probe + 1) current = sections[i].id
+  }
+
+  if (nested && root.scrollTop + root.clientHeight >= root.scrollHeight - 2) {
+    current = sections[sections.length - 1]?.id ?? current
+  } else if (!nested) {
+    const doc = document.documentElement
+    if (window.scrollY + window.innerHeight >= doc.scrollHeight - 2) {
+      current = sections[sections.length - 1]?.id ?? current
+    }
+  }
+  activeId.value = current
+}
+
+onMounted(() => {
+  const root = scrollRoot.value
+  if (isNestedScroll(root)) {
+    root.addEventListener('scroll', syncActive, { passive: true })
+  } else {
+    window.addEventListener('scroll', syncActive, { passive: true })
+  }
+})
+
+onUnmounted(() => {
+  window.clearTimeout(unlockTimer)
+  scrollRoot.value?.removeEventListener('scroll', syncActive)
+  window.removeEventListener('scroll', syncActive)
+})
 </script>

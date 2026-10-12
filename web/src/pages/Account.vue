@@ -1,117 +1,169 @@
 <template>
   <div class="container tools-layout account-layout">
-    <aside class="account-aside" aria-label="基本信息">
-      <div class="account-avatar" aria-hidden="true">{{ avatarChar }}</div>
-      <p class="account-name">{{ displayName }}</p>
-      <p v-if="loadError" class="alert error">{{ loadError }}</p>
-      <dl class="account-fields">
-        <div class="account-field">
-          <dt>账号</dt>
-          <dd>{{ display(account) }}</dd>
-        </div>
-        <div v-for="item in profileRows" :key="item.key" class="account-field">
-          <dt>{{ item.label }}</dt>
-          <dd>{{ display(fields[item.key]) }}</dd>
-        </div>
-      </dl>
-      <div class="account-actions">
-        <button v-if="!loggedIn" class="btn btn-black" type="button" @click="openLogin">登录</button>
-        <button v-else class="btn btn-black" type="button" @click="openEdit">修改信息</button>
-        <button v-if="loggedIn" class="btn btn-secondary" type="button" @click="logout">退出登录</button>
-      </div>
-    </aside>
-    <div class="tools-scroll">
-      <section class="tools-section">
-        <header class="section-header store-enter">
+    <AccountAside return-path="/account" />
+    <div class="account-chat">
+      <div class="layout-main-head">
+        <header class="section-header">
           <p class="section-eyebrow">ACCOUNT</p>
           <h2 class="section-title">用户中心</h2>
         </header>
-      </section>
+      </div>
+      <div ref="threadEl" class="assistant-thread" aria-live="polite">
+        <div v-if="!messages.length" class="assistant-empty">
+          <p class="assistant-empty-title">有什么可以帮忙的？</p>
+          <p class="assistant-empty-hint">我会尽力帮你想办法...</p>
+        </div>
+        <div v-else class="assistant-msgs">
+          <div
+            v-for="(item, index) in messages"
+            :key="index"
+            class="assistant-msg"
+            :class="'is-' + item.role"
+          >
+            <div v-if="item.role === 'user'" class="assistant-msg-bubble">{{ item.content }}</div>
+            <div v-else class="assistant-msg-md">
+              <div v-if="item.tools?.length" class="assistant-tools">
+                <span
+                  v-for="tool in item.tools"
+                  :key="tool.name"
+                  class="assistant-tool"
+                  :class="'is-' + tool.status"
+                >{{ tool.label }}</span>
+              </div>
+              <span v-if="item.content">{{ item.content }}</span>
+              <span v-else class="assistant-msg-pending">{{ item.pending || '正在思考…' }}</span>
+              <span
+                v-if="sending && index === messages.length - 1"
+                class="assistant-caret"
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p v-if="error" class="alert error assistant-error">{{ error }}</p>
+      <form class="assistant-composer" @submit.prevent="send">
+        <textarea
+          ref="inputEl"
+          v-model="draft"
+          class="assistant-input"
+          rows="1"
+          placeholder="输入消息"
+          :disabled="sending"
+          @keydown="onKey"
+          @input="autosize"
+        />
+        <button class="assistant-send" type="submit" :disabled="sending || !draft.trim()" aria-label="发送">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 19V5M12 5l-7 7M12 5l7 7"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </form>
+      <p class="assistant-composer-hint">内容由模型生成，请核实关键信息。Enter 发送，Shift+Enter 换行。</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { api, clearTokens, getAccessToken, type ProfileResp, type SchemaItem } from '../api'
-import { openAuthDialog, onAuthChanged } from '../authDialog'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { clearTokens, getAccessToken, isStaticDemo, streamAssistantChat, type ChatMessage } from '../api'
+import { openAuthDialog } from '../authDialog'
+import AccountAside from '../components/AccountAside.vue'
 
-const account = ref('')
-const schema = ref<SchemaItem[]>([])
-const fields = reactive<Record<string, string>>({})
-const loadError = ref('')
-const loggedIn = computed(() => !!account.value)
-const fallbackRows: SchemaItem[] = [
-  { key: 'employeeId', label: '工号' },
-  { key: 'phone', label: '手机号' },
-  { key: 'email', label: '邮箱' },
-  { key: 'orgName', label: '单位' }
-]
-const profileRows = computed(() => {
-  const rows = schema.value.filter((item) => item.key !== 'nickname')
-  return rows.length ? rows : fallbackRows
-})
+/* 智能助手对话 */
+const messages = ref<ChatMessage[]>([])
+const draft = ref('')
+const sending = ref(false)
+const error = ref('')
+const threadEl = ref<HTMLElement | null>(null)
+const inputEl = ref<HTMLTextAreaElement | null>(null)
+let abort: AbortController | undefined
 
-const displayName = computed(() => {
-  if (!loggedIn.value) return '访客'
-  return (fields.nickname || '').trim() || '—'
-})
+onMounted(() => inputEl.value?.focus())
+onBeforeUnmount(() => abort?.abort())
 
-const avatarChar = computed(() => {
-  const name = displayName.value
-  if (!name || name === '—') return loggedIn.value ? '' : '访'
-  return name.slice(0, 1).toUpperCase()
-})
-
-let stopAuthListen: (() => void) | undefined
-
-onMounted(() => {
-  void refresh()
-  stopAuthListen = onAuthChanged(() => { void refresh() })
-})
-
-onUnmounted(() => stopAuthListen?.())
-
-async function refresh() {
-  loadError.value = ''
-  account.value = ''
-  schema.value = []
-  for (const key of Object.keys(fields)) delete fields[key]
-  if (!getAccessToken()) return
-  try {
-    const data = await api<ProfileResp>('/api/me/profile')
-    account.value = data.account
-    schema.value = data.schema
-    for (const item of data.schema) {
-      fields[item.key] = data.fields?.[item.key] ?? ''
-    }
-  } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '无法读取档案'
-    if (loadError.value.includes('未登录') || loadError.value.includes('401')) {
-      clearTokens()
-      account.value = ''
-      loadError.value = ''
-    }
+function onKey(event: KeyboardEvent) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    void send()
   }
 }
 
-function display(value: string | undefined) {
-  const v = (value || '').trim()
-  return v || '—'
+function autosize() {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
-function openLogin() {
-  openAuthDialog('/login', '/account')
+async function scrollToEnd() {
+  await nextTick()
+  const el = threadEl.value
+  if (el) el.scrollTop = el.scrollHeight
 }
 
-function openEdit() {
-  openAuthDialog('/edit', '/account')
-}
+async function send() {
+  const text = draft.value.trim()
+  if (!text || sending.value) return
+  if (!isStaticDemo() && !getAccessToken()) {
+    openAuthDialog('/login', '/account')
+    return
+  }
+  error.value = ''
+  draft.value = ''
+  void nextTick(autosize)
 
-function logout() {
-  clearTokens()
-  account.value = ''
-  schema.value = []
-  for (const key of Object.keys(fields)) delete fields[key]
+  messages.value.push({ role: 'user', content: text })
+  const history = messages.value.map((item) => ({ ...item }))
+  messages.value.push({ role: 'assistant', content: '' })
+  const replyIndex = messages.value.length - 1
+  sending.value = true
+  abort = new AbortController()
+  await scrollToEnd()
+
+  try {
+    await streamAssistantChat(
+      history,
+      (delta) => {
+        messages.value[replyIndex].content += delta
+        messages.value[replyIndex].pending = undefined
+        void scrollToEnd()
+      },
+      abort.signal,
+      (tool) => {
+        const reply = messages.value[replyIndex]
+        const chips = reply.tools ? [...reply.tools] : []
+        const idx = chips.findIndex((item) => item.name === tool.name)
+        if (idx >= 0) chips[idx] = tool
+        else chips.push(tool)
+        reply.tools = chips
+        reply.pending = tool.status === 'start' ? `正在${tool.label}…` : reply.pending
+        void scrollToEnd()
+      }
+    )
+    if (!messages.value[replyIndex]?.content) {
+      messages.value[replyIndex].content = '（无回复）'
+    }
+  } catch (e) {
+    if ((e instanceof DOMException || e instanceof Error) && e.name === 'AbortError') return
+    const msg = e instanceof Error ? e.message : '发送失败'
+    if (msg.includes('未登录') || msg.includes('401')) {
+      clearTokens()
+      openAuthDialog('/login', '/account')
+      return
+    }
+    error.value = msg
+    if (!messages.value[replyIndex]?.content) messages.value.splice(replyIndex, 1)
+  } finally {
+    sending.value = false
+    abort = undefined
+    void nextTick(() => inputEl.value?.focus())
+  }
 }
 </script>
